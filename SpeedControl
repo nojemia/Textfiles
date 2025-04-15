@@ -1,0 +1,143 @@
+local CONFIG = {
+    ButtonName = "Speed Control",
+    ActiveColor = Color3.fromRGB(0, 255, 0),
+    InactiveColor = Color3.fromRGB(255, 0, 0),
+    DefaultWalkSpeed = 16,
+    MinWalkSpeed = 0,
+    MaxWalkSpeed = 100
+}
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local state = {
+    Active = false,
+    DesiredSpeed = CONFIG.DefaultWalkSpeed,
+    OriginalSpeed = CONFIG.DefaultWalkSpeed
+}
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SpeedControlGUI"
+screenGui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 200, 0, 100)
+frame.Position = UDim2.new(0.5, -100, 0, 20)
+frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+frame.BackgroundTransparency = 0.3
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(0, 180, 0, 40)
+toggleButton.Position = UDim2.new(0.5, -90, 0, 10)
+toggleButton.BackgroundColor3 = CONFIG.InactiveColor
+toggleButton.TextColor3 = Color3.new(1, 1, 1)
+toggleButton.Text = CONFIG.ButtonName
+toggleButton.Font = Enum.Font.SourceSansBold
+toggleButton.TextSize = 18
+toggleButton.Parent = frame
+
+local textBox = Instance.new("TextBox")
+textBox.Name = "SpeedInput"
+textBox.Size = UDim2.new(0, 180, 0, 30)
+textBox.Position = UDim2.new(0.5, -90, 0, 55)
+textBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+textBox.TextColor3 = Color3.new(1, 1, 1)
+textBox.Text = tostring(CONFIG.DefaultWalkSpeed)
+textBox.Font = Enum.Font.SourceSans
+textBox.TextSize = 16
+textBox.Parent = frame
+
+local dragging, dragInput, dragStart, startPos
+
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+frame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+textBox.FocusLost:Connect(function(enterPressed)
+    local num = tonumber(textBox.Text)
+    if num then
+        -- Clamp the value between min and max
+        num = math.clamp(num, CONFIG.MinWalkSpeed, CONFIG.MaxWalkSpeed)
+        state.DesiredSpeed = num
+        textBox.Text = tostring(num)
+        
+        -- If active, immediately apply the new speed
+        if state.Active then
+            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = num
+        end
+    else
+        textBox.Text = tostring(state.DesiredSpeed)
+    end
+end)
+
+toggleButton.MouseButton1Click:Connect(function()
+    state.Active = not state.Active
+    
+    toggleButton.BackgroundColor3 = state.Active and CONFIG.ActiveColor or CONFIG.InactiveColor
+    
+    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    
+    if humanoid then
+        if state.Active then
+            state.OriginalSpeed = humanoid.WalkSpeed
+            humanoid.WalkSpeed = state.DesiredSpeed
+        else
+            humanoid.WalkSpeed = state.OriginalSpeed
+        end
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if state.Active and LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid and humanoid.WalkSpeed ~= state.DesiredSpeed then
+            humanoid.WalkSpeed = state.DesiredSpeed
+        end
+    end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function(character)
+    character:WaitForChild("Humanoid")
+    if state.Active then
+        character.Humanoid.WalkSpeed = state.DesiredSpeed
+    end
+end)
+
+screenGui.Parent = PlayerGui
+
+if LocalPlayer.Character then
+    local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        state.OriginalSpeed = humanoid.WalkSpeed
+    end
+end
