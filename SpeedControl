@@ -6,7 +6,7 @@ local CONFIG = {
     MinWalkSpeed = 0,
     MaxWalkSpeed = 100,
     MinimizedHeight = 30,
-    ExpandedHeight = 110
+    ExpandedHeight = 130
 }
 
 local Players = game:GetService("Players")
