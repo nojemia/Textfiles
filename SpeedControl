@@ -207,6 +207,7 @@ closeButton.MouseButton1Click:Connect(function()
 	screenGui:Destroy()
 end)
 
+--[[
 RunService.Heartbeat:Connect(function()
 	if state.Active and LocalPlayer.Character then
 		local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
@@ -215,19 +216,30 @@ RunService.Heartbeat:Connect(function()
 		end
 	end
 end)
+]]
+
+local function setupHumanoidListener(humanoid)
+    humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+        if state.Active and humanoid.WalkSpeed ~= state.DesiredSpeed then
+            humanoid.WalkSpeed = state.DesiredSpeed
+        end
+    end)
+end
 
 LocalPlayer.CharacterAdded:Connect(function(character)
-	character:WaitForChild("Humanoid")
-	if state.Active then
-		character.Humanoid.WalkSpeed = state.DesiredSpeed
-	end
+    local humanoid = character:WaitForChild("Humanoid")
+    setupHumanoidListener(humanoid)
+    if state.Active then
+        humanoid.WalkSpeed = state.DesiredSpeed
+    end
 end)
 
 screenGui.Parent = PlayerGui
 
 if LocalPlayer.Character then
-	local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-	if humanoid then
-		state.OriginalSpeed = humanoid.WalkSpeed
-	end
+    local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        state.OriginalSpeed = humanoid.WalkSpeed
+        setupHumanoidListener(humanoid)
+    end
 end
