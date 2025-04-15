@@ -6,7 +6,7 @@ local CONFIG = {
     MinWalkSpeed = 0,
     MaxWalkSpeed = 100,
     MinimizedHeight = 30,
-    ExpandedHeight = 100
+    ExpandedHeight = 110
 }
 
 local Players = game:GetService("Players")
@@ -83,7 +83,7 @@ contentFrame.Name = "Content"
 contentFrame.Size = UDim2.new(1, 0, 1, -30)
 contentFrame.Position = UDim2.new(0, 0, 0, 30)
 contentFrame.BackgroundTransparency = 1
-contentFrame.ClipsDescendants = true
+contentFrame.ClipsDescendants = false
 contentFrame.Parent = frame
 
 local toggleButton = Instance.new("TextButton")
@@ -100,7 +100,7 @@ toggleButton.Parent = contentFrame
 local textBox = Instance.new("TextBox")
 textBox.Name = "SpeedInput"
 textBox.Size = UDim2.new(0, 180, 0, 30)
-textBox.Position = UDim2.new(0.5, -90, 0, 55)
+textBox.Position = UDim2.new(0.5, -90, 0, 60)
 textBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 textBox.TextColor3 = Color3.new(1, 1, 1)
 textBox.Text = tostring(CONFIG.DefaultWalkSpeed)
