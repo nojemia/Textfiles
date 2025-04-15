@@ -1,26 +1,27 @@
 local CONFIG = {
-    ButtonName = "Speed Control",
-    ActiveColor = Color3.fromRGB(0, 255, 0),
-    InactiveColor = Color3.fromRGB(255, 0, 0),
-    DefaultWalkSpeed = 16,
-    MinWalkSpeed = 0,
-    MaxWalkSpeed = 100,
-    MinimizedHeight = 30,
-    ExpandedHeight = 110
+	ButtonName = "Speed Control",
+	ActiveColor = Color3.fromRGB(0, 255, 0),
+	InactiveColor = Color3.fromRGB(255, 0, 0),
+	DefaultWalkSpeed = 16,
+	MinWalkSpeed = 1,
+	MaxWalkSpeed = 999,
+	MinimizedHeight = 30,
+	ExpandedHeight = 130
 }
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 local state = {
-    Active = false,
-    DesiredSpeed = CONFIG.DefaultWalkSpeed,
-    OriginalSpeed = CONFIG.DefaultWalkSpeed,
-    Minimized = false
+	Active = false,
+	DesiredSpeed = CONFIG.DefaultWalkSpeed,
+	OriginalSpeed = CONFIG.DefaultWalkSpeed,
+	Minimized = false
 }
 
 local screenGui = Instance.new("ScreenGui")
@@ -67,6 +68,7 @@ minimizeButton.Font = Enum.Font.SourceSansBold
 minimizeButton.TextSize = 18
 minimizeButton.Parent = titleBar
 
+
 local closeButton = Instance.new("TextButton")
 closeButton.Name = "CloseButton"
 closeButton.Size = UDim2.new(0, 25, 0, 25)
@@ -104,117 +106,128 @@ textBox.Position = UDim2.new(0.5, -90, 0, 55)
 textBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 textBox.TextColor3 = Color3.new(1, 1, 1)
 textBox.Text = tostring(CONFIG.DefaultWalkSpeed)
+textBox.PlaceholderText = tostring(CONFIG.MinWalkSpeed.." - "..CONFIG.MaxWalkSpeed)
 textBox.Font = Enum.Font.SourceSans
 textBox.TextSize = 16
 textBox.Parent = contentFrame
 
+
 local dragging, dragInput, dragStart, startPos
 
 titleBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = frame.Position
-        
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = frame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
 end)
 
 titleBar.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        dragInput = input
-    end
+	if input.UserInputType == Enum.UserInputType.MouseMovement then
+		dragInput = input
+	end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
 end)
+
 
 textBox.FocusLost:Connect(function(enterPressed)
-    local num = tonumber(textBox.Text)
-    if num then
-        num = math.clamp(num, CONFIG.MinWalkSpeed, CONFIG.MaxWalkSpeed)
-        state.DesiredSpeed = num
-        textBox.Text = tostring(num)
-        
-        if state.Active then
-            LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = num
-        end
-    else
-        textBox.Text = tostring(state.DesiredSpeed)
-    end
+	local num = tonumber(textBox.Text)
+	if num then
+		num = math.clamp(num, CONFIG.MinWalkSpeed, CONFIG.MaxWalkSpeed)
+		state.DesiredSpeed = num
+		textBox.Text = tostring(num)
+
+		if state.Active then
+			LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = num
+		end
+	else
+		textBox.Text = tostring(state.DesiredSpeed)
+	end
 end)
+
 
 toggleButton.MouseButton1Click:Connect(function()
-    state.Active = not state.Active
-    
-    toggleButton.BackgroundColor3 = state.Active and CONFIG.ActiveColor or CONFIG.InactiveColor
-    toggleButton.Text = state.Active and "ACTIVE" or "INACTIVE"
-    
-    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    
-    if humanoid then
-        if state.Active then
-            state.OriginalSpeed = humanoid.WalkSpeed
-            humanoid.WalkSpeed = state.DesiredSpeed
-        else
+	state.Active = not state.Active
 
-            humanoid.WalkSpeed = state.OriginalSpeed
-        end
-    end
+	toggleButton.BackgroundColor3 = state.Active and CONFIG.ActiveColor or CONFIG.InactiveColor
+	toggleButton.Text = state.Active and "ACTIVE" or "INACTIVE"
+
+	local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+
+	if humanoid then
+		if state.Active then
+			state.OriginalSpeed = humanoid.WalkSpeed
+			humanoid.WalkSpeed = state.DesiredSpeed
+		else
+			humanoid.WalkSpeed = state.OriginalSpeed
+		end
+	end
 end)
+
 
 minimizeButton.MouseButton1Click:Connect(function()
-    state.Minimized = not state.Minimized
-    
-    if state.Minimized then
-        frame.Size = UDim2.new(0, 200, 0, CONFIG.MinimizedHeight)
-        minimizeButton.Text = "+"
-    else
-        frame.Size = UDim2.new(0, 200, 0, CONFIG.ExpandedHeight)
-        minimizeButton.Text = "-"
-    end
+	state.Minimized = not state.Minimized
+	
+	local InfoButton = TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+	
+	if state.Minimized then
+		local TweenMin = TweenService:Create(frame, InfoButton, {Size = UDim2.new(0, 200, 0, CONFIG.MinimizedHeight)})
+		TweenMin:Play()
+		minimizeButton.Text = "+"
+		TweenMin.Completed:Wait()
+	else
+		local TweenMax = TweenService:Create(frame, InfoButton, {Size = UDim2.new(0, 200, 0, CONFIG.ExpandedHeight)})
+		TweenMax:Play()
+		minimizeButton.Text = "-"
+		TweenMax.Completed:Wait()
+	end
 end)
 
+
 closeButton.MouseButton1Click:Connect(function()
-    if state.Active and LocalPlayer.Character then
-        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid.WalkSpeed = state.OriginalSpeed
-        end
-    end
-    
-    screenGui:Destroy()
+	if state.Active and LocalPlayer.Character then
+		local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.WalkSpeed = state.OriginalSpeed
+		end
+	end
+
+	screenGui:Destroy()
 end)
 
 RunService.Heartbeat:Connect(function()
-    if state.Active and LocalPlayer.Character then
-        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if humanoid and humanoid.WalkSpeed ~= state.DesiredSpeed then
-            humanoid.WalkSpeed = state.DesiredSpeed
-        end
-    end
+	if state.Active and LocalPlayer.Character then
+		local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if humanoid and humanoid.WalkSpeed ~= state.DesiredSpeed then
+			humanoid.WalkSpeed = state.DesiredSpeed
+		end
+	end
 end)
 
 LocalPlayer.CharacterAdded:Connect(function(character)
-    character:WaitForChild("Humanoid")
-    if state.Active then
-        character.Humanoid.WalkSpeed = state.DesiredSpeed
-    end
+	character:WaitForChild("Humanoid")
+	if state.Active then
+		character.Humanoid.WalkSpeed = state.DesiredSpeed
+	end
 end)
 
 screenGui.Parent = PlayerGui
 
 if LocalPlayer.Character then
-    local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        state.OriginalSpeed = humanoid.WalkSpeed
-    end
+	local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		state.OriginalSpeed = humanoid.WalkSpeed
+	end
 end
