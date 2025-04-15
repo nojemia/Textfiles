@@ -4,7 +4,9 @@ local CONFIG = {
     InactiveColor = Color3.fromRGB(255, 0, 0),
     DefaultWalkSpeed = 16,
     MinWalkSpeed = 0,
-    MaxWalkSpeed = 100
+    MaxWalkSpeed = 100,
+    MinimizedHeight = 30,
+    ExpandedHeight = 100
 }
 
 local Players = game:GetService("Players")
@@ -17,7 +19,8 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local state = {
     Active = false,
     DesiredSpeed = CONFIG.DefaultWalkSpeed,
-    OriginalSpeed = CONFIG.DefaultWalkSpeed
+    OriginalSpeed = CONFIG.DefaultWalkSpeed,
+    Minimized = false
 }
 
 local screenGui = Instance.new("ScreenGui")
@@ -25,12 +28,63 @@ screenGui.Name = "SpeedControlGUI"
 screenGui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 200, 0, 100)
+frame.Size = UDim2.new(0, 200, 0, CONFIG.ExpandedHeight)
 frame.Position = UDim2.new(0.5, -100, 0, 20)
 frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 frame.BackgroundTransparency = 0.3
 frame.BorderSizePixel = 0
 frame.Parent = screenGui
+
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
+titleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+titleBar.BackgroundTransparency = 0.2
+titleBar.BorderSizePixel = 0
+titleBar.Parent = frame
+
+local titleText = Instance.new("TextLabel")
+titleText.Name = "Title"
+titleText.Size = UDim2.new(1, -60, 1, 0)
+titleText.Position = UDim2.new(0, 5, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = CONFIG.ButtonName
+titleText.TextColor3 = Color3.new(1, 1, 1)
+titleText.Font = Enum.Font.SourceSansBold
+titleText.TextSize = 16
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Name = "MinimizeButton"
+minimizeButton.Size = UDim2.new(0, 25, 0, 25)
+minimizeButton.Position = UDim2.new(1, -55, 0.5, -12)
+minimizeButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+minimizeButton.TextColor3 = Color3.new(1, 1, 1)
+minimizeButton.Text = "-"
+minimizeButton.Font = Enum.Font.SourceSansBold
+minimizeButton.TextSize = 18
+minimizeButton.Parent = titleBar
+
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 25, 0, 25)
+closeButton.Position = UDim2.new(1, -25, 0.5, -12)
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+closeButton.TextColor3 = Color3.new(1, 1, 1)
+closeButton.Text = "X"
+closeButton.Font = Enum.Font.SourceSansBold
+closeButton.TextSize = 18
+closeButton.Parent = titleBar
+
+local contentFrame = Instance.new("Frame")
+contentFrame.Name = "Content"
+contentFrame.Size = UDim2.new(1, 0, 1, -30)
+contentFrame.Position = UDim2.new(0, 0, 0, 30)
+contentFrame.BackgroundTransparency = 1
+contentFrame.ClipsDescendants = true
+contentFrame.Parent = frame
 
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
@@ -38,10 +92,10 @@ toggleButton.Size = UDim2.new(0, 180, 0, 40)
 toggleButton.Position = UDim2.new(0.5, -90, 0, 10)
 toggleButton.BackgroundColor3 = CONFIG.InactiveColor
 toggleButton.TextColor3 = Color3.new(1, 1, 1)
-toggleButton.Text = CONFIG.ButtonName
+toggleButton.Text = "TOGGLE"
 toggleButton.Font = Enum.Font.SourceSansBold
 toggleButton.TextSize = 18
-toggleButton.Parent = frame
+toggleButton.Parent = contentFrame
 
 local textBox = Instance.new("TextBox")
 textBox.Name = "SpeedInput"
@@ -52,11 +106,11 @@ textBox.TextColor3 = Color3.new(1, 1, 1)
 textBox.Text = tostring(CONFIG.DefaultWalkSpeed)
 textBox.Font = Enum.Font.SourceSans
 textBox.TextSize = 16
-textBox.Parent = frame
+textBox.Parent = contentFrame
 
 local dragging, dragInput, dragStart, startPos
 
-frame.InputBegan:Connect(function(input)
+titleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = true
         dragStart = input.Position
@@ -70,7 +124,7 @@ frame.InputBegan:Connect(function(input)
     end
 end)
 
-frame.InputChanged:Connect(function(input)
+titleBar.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement then
         dragInput = input
     end
@@ -86,12 +140,10 @@ end)
 textBox.FocusLost:Connect(function(enterPressed)
     local num = tonumber(textBox.Text)
     if num then
-        -- Clamp the value between min and max
         num = math.clamp(num, CONFIG.MinWalkSpeed, CONFIG.MaxWalkSpeed)
         state.DesiredSpeed = num
         textBox.Text = tostring(num)
         
-        -- If active, immediately apply the new speed
         if state.Active then
             LocalPlayer.Character:FindFirstChildOfClass("Humanoid").WalkSpeed = num
         end
@@ -104,6 +156,7 @@ toggleButton.MouseButton1Click:Connect(function()
     state.Active = not state.Active
     
     toggleButton.BackgroundColor3 = state.Active and CONFIG.ActiveColor or CONFIG.InactiveColor
+    toggleButton.Text = state.Active and "ACTIVE" or "INACTIVE"
     
     local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
     
@@ -115,6 +168,30 @@ toggleButton.MouseButton1Click:Connect(function()
             humanoid.WalkSpeed = state.OriginalSpeed
         end
     end
+end)
+
+minimizeButton.MouseButton1Click:Connect(function()
+    state.Minimized = not state.Minimized
+    
+    if state.Minimized then
+        frame.Size = UDim2.new(0, 200, 0, CONFIG.MinimizedHeight)
+        minimizeButton.Text = "+"
+    else
+        frame.Size = UDim2.new(0, 200, 0, CONFIG.ExpandedHeight)
+        minimizeButton.Text = "-"
+    end
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+    -- Restore original walkspeed if active
+    if state.Active and LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = state.OriginalSpeed
+        end
+    end
+    
+    screenGui:Destroy()
 end)
 
 RunService.Heartbeat:Connect(function()
