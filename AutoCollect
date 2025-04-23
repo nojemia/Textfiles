@@ -26,8 +26,8 @@ local THEME = {
         TextSize = 16
     },
     Collection = {
-        Interval = 0.5,
-        HeightOffset = 5
+        Interval = 0.5, -- Time between collection attempts
+        HeightOffset = 5 -- Height above the collectible
     }
 }
 
@@ -70,7 +70,7 @@ titleText.Name = "Title"
 titleText.Size = UDim2.new(1, -60, 1, 0)
 titleText.Position = UDim2.new(0, 5, 0, 0)
 titleText.BackgroundTransparency = 1
-titleText.Text = "Generic Tycoon Game - Auto Collector"
+titleText.Text = "Auto Collector"
 titleText.TextColor3 = THEME.Buttons.TextColor
 titleText.Font = THEME.Buttons.Font
 titleText.TextSize = THEME.Buttons.TextSize
@@ -173,7 +173,7 @@ local function collectAll()
                     table.insert(state.ObjectsToCollect, obj)
                 end
             end
-            s
+            
             for _, object in ipairs(state.ObjectsToCollect) do
                 if not state.Running then break end
                 if not state.Active then break end
