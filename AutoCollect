@@ -26,8 +26,8 @@ local THEME = {
         TextSize = 16
     },
     Collection = {
-        Interval = 0.5, -- Time between collection attempts
-        HeightOffset = 5 -- Height above the collectible
+        Interval = 0.1, -- Time between collection attempts
+        HeightOffset = 10 -- Height above the collectible
     }
 }
 
