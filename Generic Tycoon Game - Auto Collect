@@ -1,0 +1,235 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Theme Configuration (Customizable)
+local THEME = {
+    Window = {
+        Size = UDim2.new(0, 200, 0, 100),
+        Position = UDim2.new(0.5, -100, 0, 20),
+        BackgroundColor = Color3.fromRGB(40, 40, 40),
+        Transparency = 0.3,
+        BorderSize = 0
+    },
+    TitleBar = {
+        Height = 30,
+        BackgroundColor = Color3.fromRGB(25, 25, 25),
+        Transparency = 0.2
+    },
+    Buttons = {
+        ToggleActiveColor = Color3.fromRGB(0, 200, 0),
+        ToggleInactiveColor = Color3.fromRGB(200, 0, 0),
+        MinimizeColor = Color3.fromRGB(60, 60, 60),
+        CloseColor = Color3.fromRGB(200, 60, 60),
+        TextColor = Color3.new(1, 1, 1),
+        Font = Enum.Font.SourceSansBold,
+        TextSize = 16
+    },
+    Collection = {
+        Interval = 0.1, -- Time between collection attempts
+        HeightOffset = 3 -- Height above the collectible
+    }
+}
+
+-- Game References
+local localPlayer = Players.LocalPlayer
+local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+local collectRemote = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("CollectGrowable")
+local growables = game.Workspace.Growables
+
+-- State Management
+local state = {
+    Active = false,
+    Running = true,
+    Minimized = false,
+    ObjectsToCollect = {}
+}
+
+-- Create the GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "CollectorGUI"
+screenGui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame")
+frame.Size = THEME.Window.Size
+frame.Position = THEME.Window.Position
+frame.BackgroundColor3 = THEME.Window.BackgroundColor
+frame.BackgroundTransparency = THEME.Window.Transparency
+frame.BorderSizePixel = THEME.Window.BorderSize
+frame.Parent = screenGui
+
+-- Title Bar
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, THEME.TitleBar.Height)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
+titleBar.BackgroundColor3 = THEME.TitleBar.BackgroundColor
+titleBar.BackgroundTransparency = THEME.TitleBar.Transparency
+titleBar.BorderSizePixel = 0
+titleBar.Parent = frame
+
+local titleText = Instance.new("TextLabel")
+titleText.Name = "Title"
+titleText.Size = UDim2.new(1, -60, 1, 0)
+titleText.Position = UDim2.new(0, 5, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "Auto Collector"
+titleText.TextColor3 = THEME.Buttons.TextColor
+titleText.Font = THEME.Buttons.Font
+titleText.TextSize = THEME.Buttons.TextSize
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+-- Minimize Button
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Name = "MinimizeButton"
+minimizeButton.Size = UDim2.new(0, 25, 0, 25)
+minimizeButton.Position = UDim2.new(1, -55, 0.5, -12)
+minimizeButton.BackgroundColor3 = THEME.Buttons.MinimizeColor
+minimizeButton.TextColor3 = THEME.Buttons.TextColor
+minimizeButton.Text = "-"
+minimizeButton.Font = THEME.Buttons.Font
+minimizeButton.TextSize = THEME.Buttons.TextSize + 2
+minimizeButton.Parent = titleBar
+
+-- Close Button
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 25, 0, 25)
+closeButton.Position = UDim2.new(1, -25, 0.5, -12)
+closeButton.BackgroundColor3 = THEME.Buttons.CloseColor
+closeButton.TextColor3 = THEME.Buttons.TextColor
+closeButton.Text = "X"
+closeButton.Font = THEME.Buttons.Font
+closeButton.TextSize = THEME.Buttons.TextSize + 2
+closeButton.Parent = titleBar
+
+-- Content Frame
+local contentFrame = Instance.new("Frame")
+contentFrame.Name = "Content"
+contentFrame.Size = UDim2.new(1, 0, 1, -THEME.TitleBar.Height)
+contentFrame.Position = UDim2.new(0, 0, 0, THEME.TitleBar.Height)
+contentFrame.BackgroundTransparency = 1
+contentFrame.ClipsDescendants = true
+contentFrame.Parent = frame
+
+-- Toggle Button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(0, 180, 0, 40)
+toggleButton.Position = UDim2.new(0.5, -90, 0.5, -20)
+toggleButton.BackgroundColor3 = THEME.Buttons.ToggleInactiveColor
+toggleButton.TextColor3 = THEME.Buttons.TextColor
+toggleButton.Text = "START"
+toggleButton.Font = THEME.Buttons.Font
+toggleButton.TextSize = THEME.Buttons.TextSize
+toggleButton.Parent = contentFrame
+
+-- Make frame draggable
+local dragging, dragInput, dragStart, startPos
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- Minimize functionality
+minimizeButton.MouseButton1Click:Connect(function()
+    state.Minimized = not state.Minimized
+    
+    if state.Minimized then
+        frame.Size = UDim2.new(THEME.Window.Size.X, UDim.new(0, THEME.TitleBar.Height))
+        minimizeButton.Text = "+"
+    else
+        frame.Size = THEME.Window.Size
+        minimizeButton.Text = "-"
+    end
+end)
+
+-- Close functionality
+closeButton.MouseButton1Click:Connect(function()
+    state.Running = false
+    screenGui:Destroy()
+end)
+
+-- Collection function
+local function collectAll()
+    while state.Running do
+        if state.Active then
+            -- Refresh collectibles list
+            state.ObjectsToCollect = {}
+            for _, obj in ipairs(growables:GetChildren()) do
+                if obj:IsA("BasePart") then
+                    table.insert(state.ObjectsToCollect, obj)
+                end
+            end
+            
+            -- Collect all objects
+            for _, object in ipairs(state.ObjectsToCollect) do
+                if not state.Running then break end
+                if not state.Active then break end
+                
+                if object and object:IsA("BasePart") then
+                    hrp.CFrame = object.CFrame + Vector3.new(0, THEME.Collection.HeightOffset, 0)
+                    
+                    local success, err = pcall(function()
+                        collectRemote:FireServer(object)
+                    end)
+                    
+                    if not success and THEME.DebugMode then
+                        warn("Collection error:", err)
+                    end
+                    
+                    -- Wait for next collection
+                    local startTime = tick()
+                    RunService.Heartbeat:Wait()
+                    
+                    local elapsed = tick() - startTime
+                    if elapsed < THEME.Collection.Interval then
+                        task.wait(THEME.Collection.Interval - elapsed)
+                    end
+                end
+            end
+        end
+        task.wait(0.1)
+    end
+end
+
+toggleButton.MouseButton1Click:Connect(function()
+    state.Active = not state.Active
+    
+    toggleButton.BackgroundColor3 = state.Active and THEME.Buttons.ToggleActiveColor or THEME.Buttons.ToggleInactiveColor
+    toggleButton.Text = state.Active and "STOP" or "START"
+    
+    if state.Active and state.Running then
+        coroutine.wrap(collectAll)()
+    end
+end)
+
+screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+state.Active = false
