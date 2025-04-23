@@ -1,0 +1,389 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Default Configuration
+local CONFIG = {
+    Active = false,
+    Running = true,
+    Minimized = false,
+    ShowConfig = false,
+    
+    -- Collection Settings
+    Settings = {
+        Interval = 0.1,
+        HeightOffset = 3,
+        DebugMode = false
+    },
+    
+    -- UI Theme
+    Theme = {
+        Window = {
+            Size = UDim2.new(0, 220, 0, 160),
+            Position = UDim2.new(0.5, -110, 0, 20),
+            BackgroundColor = Color3.fromRGB(40, 40, 40),
+            Transparency = 0.3,
+            BorderSize = 0
+        },
+        TitleBar = {
+            Height = 30,
+            BackgroundColor = Color3.fromRGB(25, 25, 25),
+            Transparency = 0.2
+        },
+        Buttons = {
+            ToggleActiveColor = Color3.fromRGB(0, 200, 0),
+            ToggleInactiveColor = Color3.fromRGB(200, 0, 0),
+            ConfigColor = Color3.fromRGB(60, 60, 200),
+            MinimizeColor = Color3.fromRGB(60, 60, 60),
+            CloseColor = Color3.fromRGB(200, 60, 60),
+            TextColor = Color3.new(1, 1, 1),
+            Font = Enum.Font.SourceSansBold,
+            TextSize = 16
+        }
+    }
+}
+
+-- Game References
+local localPlayer = Players.LocalPlayer
+local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+local collectRemote = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("CollectGrowable")
+local growables = game.Workspace.Growables
+
+-- Create the GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AutoCollectorGUI"
+screenGui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = CONFIG.Theme.Window.Size
+mainFrame.Position = CONFIG.Theme.Window.Position
+mainFrame.BackgroundColor3 = CONFIG.Theme.Window.BackgroundColor
+mainFrame.BackgroundTransparency = CONFIG.Theme.Window.Transparency
+mainFrame.BorderSizePixel = CONFIG.Theme.Window.BorderSize
+mainFrame.Parent = screenGui
+
+-- Title Bar
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, CONFIG.Theme.TitleBar.Height)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
+titleBar.BackgroundColor3 = CONFIG.Theme.TitleBar.BackgroundColor
+titleBar.BackgroundTransparency = CONFIG.Theme.TitleBar.Transparency
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleText = Instance.new("TextLabel")
+titleText.Name = "Title"
+titleText.Size = UDim2.new(1, -90, 1, 0)
+titleText.Position = UDim2.new(0, 5, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "Auto Collector"
+titleText.TextColor3 = CONFIG.Theme.Buttons.TextColor
+titleText.Font = CONFIG.Theme.Buttons.Font
+titleText.TextSize = CONFIG.Theme.Buttons.TextSize
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+-- Config Button
+local configButton = Instance.new("TextButton")
+configButton.Name = "ConfigButton"
+configButton.Size = UDim2.new(0, 25, 0, 25)
+configButton.Position = UDim2.new(1, -85, 0.5, -12)
+configButton.BackgroundColor3 = CONFIG.Theme.Buttons.ConfigColor
+configButton.TextColor3 = CONFIG.Theme.Buttons.TextColor
+configButton.Text = "⚙"
+configButton.Font = Enum.Font.SourceSansBold
+configButton.TextSize = CONFIG.Theme.Buttons.TextSize + 2
+configButton.Parent = titleBar
+
+-- Minimize Button
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Name = "MinimizeButton"
+minimizeButton.Size = UDim2.new(0, 25, 0, 25)
+minimizeButton.Position = UDim2.new(1, -55, 0.5, -12)
+minimizeButton.BackgroundColor3 = CONFIG.Theme.Buttons.MinimizeColor
+minimizeButton.TextColor3 = CONFIG.Theme.Buttons.TextColor
+minimizeButton.Text = "-"
+minimizeButton.Font = CONFIG.Theme.Buttons.Font
+minimizeButton.TextSize = CONFIG.Theme.Buttons.TextSize + 2
+minimizeButton.Parent = titleBar
+
+-- Close Button
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 25, 0, 25)
+closeButton.Position = UDim2.new(1, -25, 0.5, -12)
+closeButton.BackgroundColor3 = CONFIG.Theme.Buttons.CloseColor
+closeButton.TextColor3 = CONFIG.Theme.Buttons.TextColor
+closeButton.Text = "X"
+closeButton.Font = CONFIG.Theme.Buttons.Font
+closeButton.TextSize = CONFIG.Theme.Buttons.TextSize + 2
+closeButton.Parent = titleBar
+
+-- Main Content Frame
+local contentFrame = Instance.new("Frame")
+contentFrame.Name = "Content"
+contentFrame.Size = UDim2.new(1, 0, 1, -CONFIG.Theme.TitleBar.Height)
+contentFrame.Position = UDim2.new(0, 0, 0, CONFIG.Theme.TitleBar.Height)
+contentFrame.BackgroundTransparency = 1
+contentFrame.ClipsDescendants = true
+contentFrame.Parent = mainFrame
+
+-- Toggle Button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Name = "ToggleButton"
+toggleButton.Size = UDim2.new(0, 180, 0, 40)
+toggleButton.Position = UDim2.new(0.5, -90, 0, 10)
+toggleButton.BackgroundColor3 = CONFIG.Theme.Buttons.ToggleInactiveColor
+toggleButton.TextColor3 = CONFIG.Theme.Buttons.TextColor
+toggleButton.Text = "START"
+toggleButton.Font = CONFIG.Theme.Buttons.Font
+toggleButton.TextSize = CONFIG.Theme.Buttons.TextSize
+toggleButton.Parent = contentFrame
+
+-- Config Menu (initially hidden)
+local configFrame = Instance.new("Frame")
+configFrame.Name = "ConfigMenu"
+configFrame.Size = UDim2.new(1, -10, 0, 100)
+configFrame.Position = UDim2.new(0, 5, 0, 55)
+configFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+configFrame.BackgroundTransparency = 0.4
+configFrame.BorderSizePixel = 0
+configFrame.Visible = false
+configFrame.Parent = contentFrame
+
+-- Interval Setting
+local intervalLabel = Instance.new("TextLabel")
+intervalLabel.Name = "IntervalLabel"
+intervalLabel.Size = UDim2.new(0.5, -5, 0, 20)
+intervalLabel.Position = UDim2.new(0, 5, 0, 5)
+intervalLabel.BackgroundTransparency = 1
+intervalLabel.Text = "Delay (sec):"
+intervalLabel.TextColor3 = CONFIG.Theme.Buttons.TextColor
+intervalLabel.Font = CONFIG.Theme.Buttons.Font
+intervalLabel.TextSize = CONFIG.Theme.Buttons.TextSize - 2
+intervalLabel.TextXAlignment = Enum.TextXAlignment.Left
+intervalLabel.Parent = configFrame
+
+local intervalBox = Instance.new("TextBox")
+intervalBox.Name = "IntervalInput"
+intervalBox.Size = UDim2.new(0.5, -10, 0, 20)
+intervalBox.Position = UDim2.new(0.5, 0, 0, 5)
+intervalBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+intervalBox.TextColor3 = CONFIG.Theme.Buttons.TextColor
+intervalBox.Text = tostring(CONFIG.Settings.Interval)
+intervalBox.Font = CONFIG.Theme.Buttons.Font
+intervalBox.TextSize = CONFIG.Theme.Buttons.TextSize - 2
+intervalBox.Parent = configFrame
+
+-- Height Offset Setting
+local heightLabel = Instance.new("TextLabel")
+heightLabel.Name = "HeightLabel"
+heightLabel.Size = UDim2.new(0.5, -5, 0, 20)
+heightLabel.Position = UDim2.new(0, 5, 0, 30)
+heightLabel.BackgroundTransparency = 1
+heightLabel.Text = "Height Offset:"
+heightLabel.TextColor3 = CONFIG.Theme.Buttons.TextColor
+heightLabel.Font = CONFIG.Theme.Buttons.Font
+heightLabel.TextSize = CONFIG.Theme.Buttons.TextSize - 2
+heightLabel.TextXAlignment = Enum.TextXAlignment.Left
+heightLabel.Parent = configFrame
+
+local heightBox = Instance.new("TextBox")
+heightBox.Name = "HeightInput"
+heightBox.Size = UDim2.new(0.5, -10, 0, 20)
+heightBox.Position = UDim2.new(0.5, 0, 0, 30)
+heightBox.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+heightBox.TextColor3 = CONFIG.Theme.Buttons.TextColor
+heightBox.Text = tostring(CONFIG.Settings.HeightOffset)
+heightBox.Font = CONFIG.Theme.Buttons.Font
+heightBox.TextSize = CONFIG.Theme.Buttons.TextSize - 2
+heightBox.Parent = configFrame
+
+-- Debug Mode Toggle
+local debugLabel = Instance.new("TextLabel")
+debugLabel.Name = "DebugLabel"
+debugLabel.Size = UDim2.new(0.5, -5, 0, 20)
+debugLabel.Position = UDim2.new(0, 5, 0, 55)
+debugLabel.BackgroundTransparency = 1
+debugLabel.Text = "Debug Mode:"
+debugLabel.TextColor3 = CONFIG.Theme.Buttons.TextColor
+debugLabel.Font = CONFIG.Theme.Buttons.Font
+debugLabel.TextSize = CONFIG.Theme.Buttons.TextSize - 2
+debugLabel.TextXAlignment = Enum.TextXAlignment.Left
+debugLabel.Parent = configFrame
+
+local debugToggle = Instance.new("TextButton")
+debugToggle.Name = "DebugToggle"
+debugToggle.Size = UDim2.new(0.5, -10, 0, 20)
+debugToggle.Position = UDim2.new(0.5, 0, 0, 55)
+debugToggle.BackgroundColor3 = CONFIG.Settings.DebugMode and CONFIG.Theme.Buttons.ToggleActiveColor or CONFIG.Theme.Buttons.ToggleInactiveColor
+debugToggle.TextColor3 = CONFIG.Theme.Buttons.TextColor
+debugToggle.Text = CONFIG.Settings.DebugMode and "ON" or "OFF"
+debugToggle.Font = CONFIG.Theme.Buttons.Font
+debugToggle.TextSize = CONFIG.Theme.Buttons.TextSize - 2
+debugToggle.Parent = configFrame
+
+-- Make frame draggable
+local dragging, dragInput, dragStart, startPos
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- Config Button Functionality
+configButton.MouseButton1Click:Connect(function()
+    CONFIG.ShowConfig = not CONFIG.ShowConfig
+    configFrame.Visible = CONFIG.ShowConfig
+    
+    -- Resize main frame when config is shown/hidden
+    if CONFIG.ShowConfig then
+        mainFrame.Size = UDim2.new(CONFIG.Theme.Window.Size.X, UDim.new(0, CONFIG.Theme.Window.Size.Y.Offset + configFrame.Size.Y.Offset))
+    else
+        mainFrame.Size = CONFIG.Theme.Window.Size
+    end
+end)
+
+-- Minimize functionality
+minimizeButton.MouseButton1Click:Connect(function()
+    CONFIG.Minimized = not CONFIG.Minimized
+    
+    if CONFIG.Minimized then
+        mainFrame.Size = UDim2.new(CONFIG.Theme.Window.Size.X, UDim.new(0, CONFIG.Theme.TitleBar.Height))
+        minimizeButton.Text = "+"
+    else
+        if CONFIG.ShowConfig then
+            mainFrame.Size = UDim2.new(CONFIG.Theme.Window.Size.X, UDim.new(0, CONFIG.Theme.Window.Size.Y.Offset + configFrame.Size.Y.Offset))
+        else
+            mainFrame.Size = CONFIG.Theme.Window.Size
+        end
+        minimizeButton.Text = "-"
+    end
+end)
+
+-- Close functionality
+closeButton.MouseButton1Click:Connect(function()
+    CONFIG.Running = false
+    screenGui:Destroy()
+end)
+
+-- Config Validation Functions
+local function validateNumberInput(textBox, defaultValue, minValue, maxValue)
+    local num = tonumber(textBox.Text)
+    if num then
+        num = math.clamp(num, minValue or 0, maxValue or math.huge)
+        textBox.Text = tostring(num)
+        return num
+    else
+        textBox.Text = tostring(defaultValue)
+        return defaultValue
+    end
+end
+
+-- Config Input Handlers
+intervalBox.FocusLost:Connect(function()
+    CONFIG.Settings.Interval = validateNumberInput(intervalBox, 0.1, 0.01, 5)
+end)
+
+heightBox.FocusLost:Connect(function()
+    CONFIG.Settings.HeightOffset = validateNumberInput(heightBox, 3, -10, 50)
+end)
+
+debugToggle.MouseButton1Click:Connect(function()
+    CONFIG.Settings.DebugMode = not CONFIG.Settings.DebugMode
+    debugToggle.BackgroundColor3 = CONFIG.Settings.DebugMode and CONFIG.Theme.Buttons.ToggleActiveColor or CONFIG.Theme.Buttons.ToggleInactiveColor
+    debugToggle.Text = CONFIG.Settings.DebugMode and "ON" or "OFF"
+end)
+
+-- Collection function
+local function collectAll()
+    while CONFIG.Running do
+        if CONFIG.Active then
+            -- Get all collectibles
+            local objectsToCollect = {}
+            for _, obj in ipairs(growables:GetChildren()) do
+                if obj:IsA("BasePart") then
+                    table.insert(objectsToCollect, obj)
+                end
+            end
+            
+            -- Collect all objects
+            for _, object in ipairs(objectsToCollect) do
+                if not CONFIG.Running then break end
+                if not CONFIG.Active then break end
+                
+                if object and object:IsA("BasePart") then
+                    -- Move to object
+                    hrp.CFrame = object.CFrame + Vector3.new(0, CONFIG.Settings.HeightOffset, 0)
+                    
+                    -- Fire collection event
+                    local success, err = pcall(function()
+                        collectRemote:FireServer(object)
+                    end)
+                    
+                    if not success and CONFIG.Settings.DebugMode then
+                        warn("Collection error:", err)
+                    end
+                    
+                    -- Wait for next collection
+                    local startTime = tick()
+                    RunService.Heartbeat:Wait()
+                    
+                    local elapsed = tick() - startTime
+                    if elapsed < CONFIG.Settings.Interval then
+                        task.wait(CONFIG.Settings.Interval - elapsed)
+                    end
+                end
+            end
+        end
+        task.wait(0.1) -- Small delay between full collection cycles
+    end
+end
+
+-- Toggle functionality
+toggleButton.MouseButton1Click:Connect(function()
+    CONFIG.Active = not CONFIG.Active
+    
+    -- Update button appearance
+    toggleButton.BackgroundColor3 = CONFIG.Active and CONFIG.Theme.Buttons.ToggleActiveColor or CONFIG.Theme.Buttons.ToggleInactiveColor
+    toggleButton.Text = CONFIG.Active and "STOP" or "START"
+    
+    -- Start collection coroutine if not already running
+    if CONFIG.Active and CONFIG.Running then
+        coroutine.wrap(collectAll)()
+    end
+end)
+
+-- Initialize
+screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+-- Handle character changes
+localPlayer.CharacterAdded:Connect(function(newCharacter)
+    character = newCharacter
+    hrp = newCharacter:WaitForChild("HumanoidRootPart")
+end)
