@@ -27,8 +27,8 @@ local THEME = {
         TextSize = 16
     },
     Collection = {
-        Interval = 0.1, -- Time between collection attempts
-        HeightOffset = 3 -- Height above the collectible
+        Interval = 0.5, -- Time between collection attempts
+        HeightOffset = 5 -- Height above the collectible
     }
 }
 
@@ -75,7 +75,7 @@ titleText.Name = "Title"
 titleText.Size = UDim2.new(1, -60, 1, 0)
 titleText.Position = UDim2.new(0, 5, 0, 0)
 titleText.BackgroundTransparency = 1
-titleText.Text = "Auto Collector"
+titleText.Text = "Generic Tycoon Game - Auto Collector"
 titleText.TextColor3 = THEME.Buttons.TextColor
 titleText.Font = THEME.Buttons.Font
 titleText.TextSize = THEME.Buttons.TextSize
@@ -194,8 +194,10 @@ local function collectAll()
                 if not state.Active then break end
                 
                 if object and object:IsA("BasePart") then
+                    -- Move to object
                     hrp.CFrame = object.CFrame + Vector3.new(0, THEME.Collection.HeightOffset, 0)
                     
+                    -- Fire collection event
                     local success, err = pcall(function()
                         collectRemote:FireServer(object)
                     end)
@@ -215,21 +217,26 @@ local function collectAll()
                 end
             end
         end
-        task.wait(0.1)
+        task.wait(0.1) -- Small delay between full collection cycles
     end
 end
 
+-- Toggle functionality
 toggleButton.MouseButton1Click:Connect(function()
     state.Active = not state.Active
     
+    -- Update button appearance
     toggleButton.BackgroundColor3 = state.Active and THEME.Buttons.ToggleActiveColor or THEME.Buttons.ToggleInactiveColor
     toggleButton.Text = state.Active and "STOP" or "START"
     
+    -- Start collection coroutine if not already running
     if state.Active and state.Running then
         coroutine.wrap(collectAll)()
     end
 end)
 
+-- Initialize
 screenGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
+-- Start with inactive state
 state.Active = false
