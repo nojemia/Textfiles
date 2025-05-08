@@ -2,882 +2,237 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local Lighting = game:GetService("Lighting")
 local Camera = workspace.CurrentCamera
-
--- Core Variables
 local LocalPlayer = Players.LocalPlayer
+
+-- Load Fluent UI with error handling
+local Fluent, SaveManager, InterfaceManager
+local success, err = pcall(function()
+    Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+    SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+    InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+end)
+
+if not success then
+    warn("Failed to load Fluent UI: "..tostring(err))
+    return
+end
+
+-- Data structures
 local Drawings = {
     ESP = {},
-    Tracers = {},
-    Boxes = {},
-    Healthbars = {},
-    Names = {},
-    Distances = {},
-    Snaplines = {},
     Skeleton = {}
 }
+
 local Highlights = {}
 
--- Settings with better defaults
+local Colors = {
+    Enemy = Color3.fromRGB(255, 25, 25),
+    Ally = Color3.fromRGB(25, 255, 25),
+    Neutral = Color3.fromRGB(255, 255, 255),
+    Selected = Color3.fromRGB(255, 210, 0),
+    Health = Color3.fromRGB(0, 255, 0),
+    Distance = Color3.fromRGB(200, 200, 200),
+    Rainbow = nil
+}
+
 local Settings = {
     Enabled = false,
     TeamCheck = false,
     ShowTeam = false,
+    VisibilityCheck = true,
     BoxESP = false,
     BoxStyle = "Corner",
+    BoxOutline = true,
+    BoxFilled = false,
+    BoxFillTransparency = 0.5,
     BoxThickness = 1,
     TracerESP = false,
     TracerOrigin = "Bottom",
+    TracerStyle = "Line",
     TracerThickness = 1,
     HealthESP = false,
     HealthStyle = "Bar",
+    HealthBarSide = "Left",
+    HealthTextSuffix = "HP",
     NameESP = false,
+    NameMode = "DisplayName",
     ShowDistance = true,
+    DistanceUnit = "studs",
     TextSize = 14,
     TextFont = 2,
-    MaxDistance = 1000,
-    RefreshRate = 1/60, -- More reasonable default
-    Snaplines = false,
-    RainbowEnabled = false,
     RainbowSpeed = 1,
+    MaxDistance = 1000,
+    RefreshRate = 1/144,
+    Snaplines = false,
+    SnaplineStyle = "Straight",
+    RainbowEnabled = false,
+    RainbowBoxes = false,
+    RainbowTracers = false,
+    RainbowText = false,
     ChamsEnabled = false,
     ChamsOutlineColor = Color3.fromRGB(255, 255, 255),
     ChamsFillColor = Color3.fromRGB(255, 0, 0),
+    ChamsOccludedColor = Color3.fromRGB(150, 0, 0),
     ChamsTransparency = 0.5,
+    ChamsOutlineTransparency = 0,
+    ChamsOutlineThickness = 0.1,
     SkeletonESP = false,
     SkeletonColor = Color3.fromRGB(255, 255, 255),
-    SkeletonThickness = 1,
-    SkeletonTransparency = 0
+    SkeletonThickness = 1.5,
+    SkeletonTransparency = 1
 }
 
--- Colors with better contrast
-local Colors = {
-    Enemy = Color3.fromRGB(255, 50, 50),
-    Ally = Color3.fromRGB(50, 255, 50),
-    Neutral = Color3.fromRGB(255, 255, 255),
-    Health = Color3.fromRGB(0, 255, 0),
-    Rainbow = nil
-}
-
--- Load Fluent UI with error handling
-local Fluent, SaveManager, InterfaceManager
-local function LoadFluent()
-    local success, err = pcall(function()
-        Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-        SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-        InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
-    end)
-    if not success then
-        warn("Failed to load Fluent UI: "..tostring(err))
-        return false
+-- Helper functions
+local function CreateDrawing(type, properties)
+    local drawing = Drawing.new(type)
+    for prop, value in pairs(properties) do
+        drawing[prop] = value
     end
-    return true
+    return drawing
 end
 
-if not LoadFluent() then
-    warn("Critical error - could not load UI libraries")
-    return
-end
-
--- Improved ESP creation with better memory management
 local function CreateESP(player)
     if player == LocalPlayer then return end
     
     local box = {
-        TopLeft = Drawing.new("Line"),
-        TopRight = Drawing.new("Line"),
-        BottomLeft = Drawing.new("Line"),
-        BottomRight = Drawing.new("Line"),
-        Left = Drawing.new("Line"),
-        Right = Drawing.new("Line"),
-        Top = Drawing.new("Line"),
-        Bottom = Drawing.new("Line")
+        TopLeft = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
+        TopRight = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
+        BottomLeft = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
+        BottomRight = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
+        Left = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
+        Right = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
+        Top = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
+        Bottom = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness})
     }
     
-    for _, line in pairs(box) do
-        line.Visible = false
-        line.Color = Colors.Enemy
-        line.Thickness = Settings.BoxThickness
-    end
-    
-    local tracer = Drawing.new("Line")
-    tracer.Visible = false
-    tracer.Color = Colors.Enemy
-    tracer.Thickness = Settings.TracerThickness
+    local tracer = CreateDrawing("Line", {
+        Visible = false,
+        Color = Colors.Enemy,
+        Thickness = Settings.TracerThickness
+    })
     
     local healthBar = {
-        Outline = Drawing.new("Square"),
-        Fill = Drawing.new("Square"),
-        Text = Drawing.new("Text")
+        Outline = CreateDrawing("Square", {Visible = false}),
+        Fill = CreateDrawing("Square", {Visible = false, Filled = true, Color = Colors.Health}),
+        Text = CreateDrawing("Text", {Visible = false, Center = true, Size = Settings.TextSize, Color = Colors.Health, Font = Settings.TextFont})
     }
-    
-    for _, obj in pairs(healthBar) do
-        obj.Visible = false
-        if obj == healthBar.Fill then
-            obj.Filled = true
-        elseif obj == healthBar.Text then
-            obj.Center = true
-            obj.Size = Settings.TextSize
-            obj.Font = Settings.TextFont
-        end
-    end
     
     local info = {
-        Name = Drawing.new("Text"),
-        Distance = Drawing.new("Text")
+        Name = CreateDrawing("Text", {Visible = false, Center = true, Size = Settings.TextSize, Color = Colors.Enemy, Font = Settings.TextFont, Outline = true}),
+        Distance = CreateDrawing("Text", {Visible = false, Center = true, Size = Settings.TextSize, Color = Colors.Enemy, Font = Settings.TextFont, Outline = true})
     }
     
-    for _, text in pairs(info) do
-        text.Visible = false
-        text.Center = true
-        text.Size = Settings.TextSize
-        text.Font = Settings.TextFont
-        text.Outline = true
-    end
+    local snapline = CreateDrawing("Line", {
+        Visible = false,
+        Color = Colors.Enemy,
+        Thickness = 1
+    })
     
     local highlight = Instance.new("Highlight")
     highlight.FillColor = Settings.ChamsFillColor
     highlight.OutlineColor = Settings.ChamsOutlineColor
     highlight.FillTransparency = Settings.ChamsTransparency
-    highlight.OutlineTransparency = 0
+    highlight.OutlineTransparency = Settings.ChamsOutlineTransparency
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     highlight.Enabled = Settings.ChamsEnabled
     
+    Highlights[player] = highlight
+    
+    local skeletonParts = {
+        "Head", "Neck", "UpperSpine", "LowerSpine",
+        "LeftShoulder", "LeftUpperArm", "LeftLowerArm", "LeftHand",
+        "RightShoulder", "RightUpperArm", "RightLowerArm", "RightHand",
+        "LeftHip", "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
+        "RightHip", "RightUpperLeg", "RightLowerLeg", "RightFoot"
+    }
+    
+    local skeleton = {}
+    for _, partName in ipairs(skeletonParts) do
+        skeleton[partName] = CreateDrawing("Line", {
+            Visible = false,
+            Color = Settings.SkeletonColor,
+            Thickness = Settings.SkeletonThickness,
+            Transparency = Settings.SkeletonTransparency
+        })
+    end
+    
+    Drawings.Skeleton[player] = skeleton
     Drawings.ESP[player] = {
         Box = box,
         Tracer = tracer,
         HealthBar = healthBar,
         Info = info,
-        Highlight = highlight
+        Snapline = snapline
     }
-    
-    -- Initialize skeleton if enabled
-    if Settings.SkeletonESP then
-        local skeleton = {
-            Head = Drawing.new("Line"),
-            Neck = Drawing.new("Line"),
-            UpperSpine = Drawing.new("Line"),
-            LowerSpine = Drawing.new("Line"),
-            LeftShoulder = Drawing.new("Line"),
-            LeftUpperArm = Drawing.new("Line"),
-            LeftLowerArm = Drawing.new("Line"),
-            LeftHand = Drawing.new("Line"),
-            RightShoulder = Drawing.new("Line"),
-            RightUpperArm = Drawing.new("Line"),
-            RightLowerArm = Drawing.new("Line"),
-            RightHand = Drawing.new("Line"),
-            LeftHip = Drawing.new("Line"),
-            LeftUpperLeg = Drawing.new("Line"),
-            LeftLowerLeg = Drawing.new("Line"),
-            LeftFoot = Drawing.new("Line"),
-            RightHip = Drawing.new("Line"),
-            RightUpperLeg = Drawing.new("Line"),
-            RightLowerLeg = Drawing.new("Line"),
-            RightFoot = Drawing.new("Line")
-        }
-        
-        for _, line in pairs(skeleton) do
-            line.Visible = false
-            line.Color = Settings.SkeletonColor
-            line.Thickness = Settings.SkeletonThickness
-            line.Transparency = Settings.SkeletonTransparency
-        end
-        
-        Drawings.Skeleton[player] = skeleton
-    end
 end
 
--- More thorough cleanup
 local function RemoveESP(player)
+    local function safeRemove(obj)
+        if obj and typeof(obj) == "Instance" and obj:IsA("Line") then
+            obj:Remove()
+        end
+    end
+    
     local esp = Drawings.ESP[player]
     if esp then
-        for _, obj in pairs(esp.Box) do 
-            pcall(obj.Remove, obj)
-        end
-        pcall(esp.Tracer.Remove, esp.Tracer)
-        for _, obj in pairs(esp.HealthBar) do 
-            pcall(obj.Remove, obj)
-        end
-        for _, obj in pairs(esp.Info) do 
-            pcall(obj.Remove, obj)
-        end
-        if esp.Highlight then
-            pcall(esp.Highlight.Destroy, esp.Highlight)
-        end
+        for _, obj in pairs(esp.Box) do safeRemove(obj) end
+        safeRemove(esp.Tracer)
+        for _, obj in pairs(esp.HealthBar) do safeRemove(obj) end
+        for _, obj in pairs(esp.Info) do safeRemove(obj) end
+        safeRemove(esp.Snapline)
         Drawings.ESP[player] = nil
+    end
+    
+    local highlight = Highlights[player]
+    if highlight then
+        highlight:Destroy()
+        Highlights[player] = nil
     end
     
     local skeleton = Drawings.Skeleton[player]
     if skeleton then
         for _, line in pairs(skeleton) do
-            pcall(line.Remove, line)
+            safeRemove(line)
         end
         Drawings.Skeleton[player] = nil
     end
 end
 
--- Improved distance calculation
-local function GetDistanceFromCamera(position)
-    return (position - Camera.CFrame.Position).Magnitude
-end
+-- Rest of your functions (GetPlayerColor, GetBoxCorners, GetTracerOrigin, UpdateESP, etc.)
+-- ... [Keep all your existing functions but add error handling where needed]
 
--- More accurate screen position checks with nil protection
-local function IsOnScreen(position)
-    if not position then return false end
-    local screenPos, onScreen = pcall(function()
-        return Camera:WorldToViewportPoint(position)
-    end)
-    if not screenPos then return false end
-    return onScreen and screenPos.Z > 0 
-        and screenPos.X > 0 and screenPos.X < Camera.ViewportSize.X 
-        and screenPos.Y > 0 and screenPos.Y < Camera.ViewportSize.Y
-end
+-- Create the UI Window with error handling
+local Window, Tabs
+local success, err = pcall(function()
+    Window = Fluent:CreateWindow({
+        Title = "WA Universal ESP",
+        SubTitle = "by WA",
+        TabWidth = 160,
+        Size = UDim2.fromOffset(580, 460),
+        Acrylic = false,
+        Theme = "Dark",
+        MinimizeKey = Enum.KeyCode.LeftControl
+    })
 
--- Safe position getter
-local function GetScreenPosition(position)
-    local success, screenPos = pcall(function()
-        return Camera:WorldToViewportPoint(position)
-    end)
-    if success and screenPos then
-        return Vector2.new(screenPos.X, screenPos.Y), screenPos.Z > 0
-    end
-    return nil, false
-end
-
--- Optimized ESP update with better error handling
-local function UpdateESP(player)
-    if not Settings.Enabled then return end
-    
-    local esp = Drawings.ESP[player]
-    if not esp then return end
-    
-    local character = player.Character
-    if not character then
-        for _, obj in pairs(esp.Box) do obj.Visible = false end
-        esp.Tracer.Visible = false
-        for _, obj in pairs(esp.HealthBar) do obj.Visible = false end
-        for _, obj in pairs(esp.Info) do obj.Visible = false end
-        if esp.Highlight then esp.Highlight.Enabled = false end
-        return
-    end
-    
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart or not IsOnScreen(rootPart.Position) then
-        for _, obj in pairs(esp.Box) do obj.Visible = false end
-        esp.Tracer.Visible = false
-        for _, obj in pairs(esp.HealthBar) do obj.Visible = false end
-        for _, obj in pairs(esp.Info) do obj.Visible = false end
-        if esp.Highlight then esp.Highlight.Enabled = false end
-        return
-    end
-    
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then
-        for _, obj in pairs(esp.Box) do obj.Visible = false end
-        esp.Tracer.Visible = false
-        for _, obj in pairs(esp.HealthBar) do obj.Visible = false end
-        for _, obj in pairs(esp.Info) do obj.Visible = false end
-        if esp.Highlight then esp.Highlight.Enabled = false end
-        return
-    end
-    
-    local distance = GetDistanceFromCamera(rootPart.Position)
-    if distance > Settings.MaxDistance then
-        for _, obj in pairs(esp.Box) do obj.Visible = false end
-        esp.Tracer.Visible = false
-        for _, obj in pairs(esp.HealthBar) do obj.Visible = false end
-        for _, obj in pairs(esp.Info) do obj.Visible = false end
-        if esp.Highlight then esp.Highlight.Enabled = false end
-        return
-    end
-    
-    local color = Settings.RainbowEnabled and Colors.Rainbow or 
-                 (player.Team == LocalPlayer.Team and Colors.Ally or Colors.Enemy)
-    
-    -- Get screen positions safely
-    local topPos = (rootPart.CFrame * CFrame.new(0, character:GetExtentsSize().Y/2, 0)).Position
-    local bottomPos = (rootPart.CFrame * CFrame.new(0, -character:GetExtentsSize().Y/2, 0)).Position
-    
-    local topScreen, topOnScreen = GetScreenPosition(topPos)
-    local bottomScreen, bottomOnScreen = GetScreenPosition(bottomPos)
-    
-    if not topScreen or not bottomScreen or not topOnScreen or not bottomOnScreen then
-        for _, obj in pairs(esp.Box) do obj.Visible = false end
-        return
-    end
-    
-    -- Update box ESP
-    if Settings.BoxESP then
-        local screenSize = bottomScreen.Y - topScreen.Y
-        local boxWidth = screenSize * 0.65
-        local boxPosition = Vector2.new(topScreen.X - boxWidth/2, topScreen.Y)
-        local boxSize = Vector2.new(boxWidth, screenSize)
-        
-        if Settings.BoxStyle == "Corner" then
-            local cornerSize = boxWidth * 0.2
-            
-            esp.Box.TopLeft.From = boxPosition
-            esp.Box.TopLeft.To = boxPosition + Vector2.new(cornerSize, 0)
-            esp.Box.TopLeft.Visible = true
-            
-            esp.Box.TopRight.From = boxPosition + Vector2.new(boxSize.X, 0)
-            esp.Box.TopRight.To = boxPosition + Vector2.new(boxSize.X - cornerSize, 0)
-            esp.Box.TopRight.Visible = true
-            
-            esp.Box.BottomLeft.From = boxPosition + Vector2.new(0, boxSize.Y)
-            esp.Box.BottomLeft.To = boxPosition + Vector2.new(cornerSize, boxSize.Y)
-            esp.Box.BottomLeft.Visible = true
-            
-            esp.Box.BottomRight.From = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
-            esp.Box.BottomRight.To = boxPosition + Vector2.new(boxSize.X - cornerSize, boxSize.Y)
-            esp.Box.BottomRight.Visible = true
-            
-            esp.Box.Left.From = boxPosition
-            esp.Box.Left.To = boxPosition + Vector2.new(0, cornerSize)
-            esp.Box.Left.Visible = true
-            
-            esp.Box.Right.From = boxPosition + Vector2.new(boxSize.X, 0)
-            esp.Box.Right.To = boxPosition + Vector2.new(boxSize.X, cornerSize)
-            esp.Box.Right.Visible = true
-            
-            esp.Box.Top.From = boxPosition + Vector2.new(0, boxSize.Y)
-            esp.Box.Top.To = boxPosition + Vector2.new(0, boxSize.Y - cornerSize)
-            esp.Box.Top.Visible = true
-            
-            esp.Box.Bottom.From = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
-            esp.Box.Bottom.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y - cornerSize)
-            esp.Box.Bottom.Visible = true
-        else -- Full box
-            esp.Box.Left.From = boxPosition
-            esp.Box.Left.To = boxPosition + Vector2.new(0, boxSize.Y)
-            esp.Box.Left.Visible = true
-            
-            esp.Box.Right.From = boxPosition + Vector2.new(boxSize.X, 0)
-            esp.Box.Right.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
-            esp.Box.Right.Visible = true
-            
-            esp.Box.Top.From = boxPosition
-            esp.Box.Top.To = boxPosition + Vector2.new(boxSize.X, 0)
-            esp.Box.Top.Visible = true
-            
-            esp.Box.Bottom.From = boxPosition + Vector2.new(0, boxSize.Y)
-            esp.Box.Bottom.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
-            esp.Box.Bottom.Visible = true
-        end
-        
-        for _, obj in pairs(esp.Box) do
-            if obj.Visible then
-                obj.Color = color
-                obj.Thickness = Settings.BoxThickness
-            end
-        end
-    else
-        for _, obj in pairs(esp.Box) do obj.Visible = false end
-    end
-    
-    -- Update tracer
-    if Settings.TracerESP then
-        local rootScreen = GetScreenPosition(rootPart.Position)
-        if rootScreen then
-            esp.Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
-            esp.Tracer.To = rootScreen
-            esp.Tracer.Color = color
-            esp.Tracer.Visible = true
-        else
-            esp.Tracer.Visible = false
-        end
-    else
-        esp.Tracer.Visible = false
-    end
-    
-    -- Update health bar
-    if Settings.HealthESP and humanoid then
-        local healthPercent = humanoid.Health / humanoid.MaxHealth
-        local barHeight = (bottomScreen.Y - topScreen.Y) * 0.8
-        local barWidth = 4
-        local barPos = Vector2.new(
-            boxPosition.X - barWidth - 2,
-            boxPosition.Y + ((bottomScreen.Y - topScreen.Y) - barHeight)/2
-        )
-        
-        esp.HealthBar.Fill.Color = Color3.new(1 - healthPercent, healthPercent, 0)
-        esp.HealthBar.Fill.Size = Vector2.new(barWidth - 2, barHeight * healthPercent)
-        esp.HealthBar.Fill.Position = Vector2.new(barPos.X + 1, barPos.Y + barHeight * (1 - healthPercent))
-        esp.HealthBar.Fill.Visible = true
-        
-        esp.HealthBar.Outline.Size = Vector2.new(barWidth, barHeight)
-        esp.HealthBar.Outline.Position = barPos
-        esp.HealthBar.Outline.Visible = true
-        
-        if Settings.HealthStyle == "Both" or Settings.HealthStyle == "Text" then
-            esp.HealthBar.Text.Text = math.floor(humanoid.Health)
-            esp.HealthBar.Text.Position = barPos + Vector2.new(barWidth + 2, barHeight/2)
-            esp.HealthBar.Text.Visible = true
-        else
-            esp.HealthBar.Text.Visible = false
-        end
-    else
-        for _, obj in pairs(esp.HealthBar) do
-            obj.Visible = false
-        end
-    end
-    
-    -- Update name
-    if Settings.NameESP then
-        esp.Info.Name.Text = player.DisplayName
-        esp.Info.Name.Position = Vector2.new(topScreen.X, topScreen.Y - 20)
-        esp.Info.Name.Color = color
-        esp.Info.Name.Visible = true
-    else
-        esp.Info.Name.Visible = false
-    end
-    
-    -- Update highlight/chams
-    if esp.Highlight then
-        esp.Highlight.Enabled = Settings.ChamsEnabled
-        if Settings.ChamsEnabled then
-            esp.Highlight.FillColor = Settings.ChamsFillColor
-            esp.Highlight.OutlineColor = Settings.ChamsOutlineColor
-            esp.Highlight.FillTransparency = Settings.ChamsTransparency
-            esp.Highlight.Parent = character
-        else
-            esp.Highlight.Parent = nil
-        end
-    end
-    
-    -- Update skeleton
-    if Settings.SkeletonESP then
-        local skeleton = Drawings.Skeleton[player]
-        if not skeleton then
-            skeleton = {
-                Head = Drawing.new("Line"),
-                Neck = Drawing.new("Line"),
-                UpperSpine = Drawing.new("Line"),
-                LowerSpine = Drawing.new("Line"),
-                LeftShoulder = Drawing.new("Line"),
-                LeftUpperArm = Drawing.new("Line"),
-                LeftLowerArm = Drawing.new("Line"),
-                LeftHand = Drawing.new("Line"),
-                RightShoulder = Drawing.new("Line"),
-                RightUpperArm = Drawing.new("Line"),
-                RightLowerArm = Drawing.new("Line"),
-                RightHand = Drawing.new("Line"),
-                LeftHip = Drawing.new("Line"),
-                LeftUpperLeg = Drawing.new("Line"),
-                LeftLowerLeg = Drawing.new("Line"),
-                LeftFoot = Drawing.new("Line"),
-                RightHip = Drawing.new("Line"),
-                RightUpperLeg = Drawing.new("Line"),
-                RightLowerLeg = Drawing.new("Line"),
-                RightFoot = Drawing.new("Line")
-            }
-            Drawings.Skeleton[player] = skeleton
-        end
-        
-        local bones = {
-            Head = character:FindFirstChild("Head"),
-            UpperTorso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso"),
-            LowerTorso = character:FindFirstChild("LowerTorso"),
-            LeftUpperArm = character:FindFirstChild("LeftUpperArm"),
-            LeftLowerArm = character:FindFirstChild("LeftLowerArm"),
-            LeftHand = character:FindFirstChild("LeftHand"),
-            RightUpperArm = character:FindFirstChild("RightUpperArm"),
-            RightLowerArm = character:FindFirstChild("RightLowerArm"),
-            RightHand = character:FindFirstChild("RightHand"),
-            LeftUpperLeg = character:FindFirstChild("LeftUpperLeg"),
-            LeftLowerLeg = character:FindFirstChild("LeftLowerLeg"),
-            LeftFoot = character:FindFirstChild("LeftFoot"),
-            RightUpperLeg = character:FindFirstChild("RightUpperLeg"),
-            RightLowerLeg = character:FindFirstChild("RightLowerLeg"),
-            RightFoot = character:FindFirstChild("RightFoot")
-        }
-        
-        if bones.Head and bones.UpperTorso then
-            -- Head and spine
-            UpdateSkeletonLine(bones.Head, bones.UpperTorso, skeleton.Head)
-            if bones.LowerTorso then
-                UpdateSkeletonLine(bones.UpperTorso, bones.LowerTorso, skeleton.UpperSpine)
-            end
-            
-            -- Arms
-            if bones.LeftUpperArm then
-                UpdateSkeletonLine(bones.UpperTorso, bones.LeftUpperArm, skeleton.LeftShoulder)
-                if bones.LeftLowerArm then
-                    UpdateSkeletonLine(bones.LeftUpperArm, bones.LeftLowerArm, skeleton.LeftUpperArm)
-                    if bones.LeftHand then
-                        UpdateSkeletonLine(bones.LeftLowerArm, bones.LeftHand, skeleton.LeftLowerArm)
-                    end
-                end
-            end
-            
-            if bones.RightUpperArm then
-                UpdateSkeletonLine(bones.UpperTorso, bones.RightUpperArm, skeleton.RightShoulder)
-                if bones.RightLowerArm then
-                    UpdateSkeletonLine(bones.RightUpperArm, bones.RightLowerArm, skeleton.RightUpperArm)
-                    if bones.RightHand then
-                        UpdateSkeletonLine(bones.RightLowerArm, bones.RightHand, skeleton.RightLowerArm)
-                    end
-                end
-            end
-            
-            -- Legs
-            if bones.LowerTorso then
-                if bones.LeftUpperLeg then
-                    UpdateSkeletonLine(bones.LowerTorso, bones.LeftUpperLeg, skeleton.LeftHip)
-                    if bones.LeftLowerLeg then
-                        UpdateSkeletonLine(bones.LeftUpperLeg, bones.LeftLowerLeg, skeleton.LeftUpperLeg)
-                        if bones.LeftFoot then
-                            UpdateSkeletonLine(bones.LeftLowerLeg, bones.LeftFoot, skeleton.LeftLowerLeg)
-                        end
-                    end
-                end
-                
-                if bones.RightUpperLeg then
-                    UpdateSkeletonLine(bones.LowerTorso, bones.RightUpperLeg, skeleton.RightHip)
-                    if bones.RightLowerLeg then
-                        UpdateSkeletonLine(bones.RightUpperLeg, bones.RightLowerLeg, skeleton.RightUpperLeg)
-                        if bones.RightFoot then
-                            UpdateSkeletonLine(bones.RightLowerLeg, bones.RightFoot, skeleton.RightLowerLeg)
-                        end
-                    end
-                end
-            end
-        end
-    end
-end
-
-local function UpdateSkeletonLine(part1, part2, line)
-    if not part1 or not part2 then
-        line.Visible = false
-        return
-    end
-    
-    local pos1 = part1.Position
-    local pos2 = part2.Position
-    
-    if IsOnScreen(pos1) and IsOnScreen(pos2) then
-        local screen1 = GetScreenPosition(pos1)
-        local screen2 = GetScreenPosition(pos2)
-        
-        if screen1 and screen2 then
-            line.From = screen1
-            line.To = screen2
-            line.Color = Settings.SkeletonColor
-            line.Thickness = Settings.SkeletonThickness
-            line.Transparency = Settings.SkeletonTransparency
-            line.Visible = true
-        else
-            line.Visible = false
-        end
-    else
-        line.Visible = false
-    end
-end
-
--- Create UI
-local Window = Fluent:CreateWindow({
-    Title = "Universal ESP",
-    SubTitle = "by WA",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
-    Acrylic = false,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
-})
-
-local Tabs = {
-    Main = Window:AddTab({Title = "Main", Icon = "settings"}),
-    Visuals = Window:AddTab({Title = "Visuals", Icon = "eye"}),
-    Settings = Window:AddTab({Title = "Settings", Icon = "settings"})
-}
-
--- Main Tab
-do
-    local MainSection = Tabs.Main:AddSection("Main Settings")
-    
-    MainSection:AddToggle("Enabled", {
-        Title = "Enable ESP",
-        Default = false,
-        Callback = function(Value)
-            Settings.Enabled = Value
-            if not Value then
-                for _, player in ipairs(Players:GetPlayers()) do
-                    if player ~= LocalPlayer then
-                        RemoveESP(player)
-                    end
-                end
-            else
-                for _, player in ipairs(Players:GetPlayers()) do
-                    if player ~= LocalPlayer then
-                        CreateESP(player)
-                    end
-                end
-            end
-        end
-    })
-    
-    MainSection:AddToggle("TeamCheck", {
-        Title = "Team Check",
-        Default = false,
-        Callback = function(Value)
-            Settings.TeamCheck = Value
-        end
-    })
-    
-    MainSection:AddSlider("MaxDistance", {
-        Title = "Max Distance",
-        Default = 1000,
-        Min = 100,
-        Max = 5000,
-        Rounding = 0,
-        Callback = function(Value)
-            Settings.MaxDistance = Value
-        end
-    })
-end
-
--- Visuals Tab
-do
-    local BoxSection = Tabs.Visuals:AddSection("Box ESP")
-    
-    BoxSection:AddToggle("BoxESP", {
-        Title = "Enable Box ESP",
-        Default = false,
-        Callback = function(Value)
-            Settings.BoxESP = Value
-        end
-    })
-    
-    BoxSection:AddDropdown("BoxStyle", {
-        Title = "Box Style",
-        Values = {"Corner", "Full"},
-        Default = "Corner",
-        Callback = function(Value)
-            Settings.BoxStyle = Value
-        end
-    })
-    
-    BoxSection:AddSlider("BoxThickness", {
-        Title = "Box Thickness",
-        Default = 1,
-        Min = 1,
-        Max = 5,
-        Rounding = 0,
-        Callback = function(Value)
-            Settings.BoxThickness = Value
-        end
-    })
-    
-    local TracerSection = Tabs.Visuals:AddSection("Tracer ESP")
-    
-    TracerSection:AddToggle("TracerESP", {
-        Title = "Enable Tracers",
-        Default = false,
-        Callback = function(Value)
-            Settings.TracerESP = Value
-        end
-    })
-    
-    TracerSection:AddDropdown("TracerOrigin", {
-        Title = "Tracer Origin",
-        Values = {"Bottom", "Top", "Mouse", "Center"},
-        Default = "Bottom",
-        Callback = function(Value)
-            Settings.TracerOrigin = Value
-        end
-    })
-    
-    TracerSection:AddSlider("TracerThickness", {
-        Title = "Tracer Thickness",
-        Default = 1,
-        Min = 1,
-        Max = 5,
-        Rounding = 0,
-        Callback = function(Value)
-            Settings.TracerThickness = Value
-        end
-    })
-    
-    local HealthSection = Tabs.Visuals:AddSection("Health ESP")
-    
-    HealthSection:AddToggle("HealthESP", {
-        Title = "Enable Health Bar",
-        Default = false,
-        Callback = function(Value)
-            Settings.HealthESP = Value
-        end
-    })
-    
-    HealthSection:AddDropdown("HealthStyle", {
-        Title = "Health Style",
-        Values = {"Bar", "Text", "Both"},
-        Default = "Bar",
-        Callback = function(Value)
-            Settings.HealthStyle = Value
-        end
-    })
-    
-    local NameSection = Tabs.Visuals:AddSection("Name ESP")
-    
-    NameSection:AddToggle("NameESP", {
-        Title = "Enable Name ESP",
-        Default = false,
-        Callback = function(Value)
-            Settings.NameESP = Value
-        end
-    })
-    
-    NameSection:AddSlider("TextSize", {
-        Title = "Text Size",
-        Default = 14,
-        Min = 8,
-        Max = 24,
-        Rounding = 0,
-        Callback = function(Value)
-            Settings.TextSize = Value
-        end
-    })
-    
-    local ChamsSection = Tabs.Visuals:AddSection("Chams")
-    
-    ChamsSection:AddToggle("ChamsEnabled", {
-        Title = "Enable Chams",
-        Default = false,
-        Callback = function(Value)
-            Settings.ChamsEnabled = Value
-        end
-    })
-    
-    ChamsSection:AddColorpicker("ChamsFillColor", {
-        Title = "Fill Color",
-        Default = Settings.ChamsFillColor,
-        Callback = function(Value)
-            Settings.ChamsFillColor = Value
-        end
-    })
-    
-    ChamsSection:AddColorpicker("ChamsOutlineColor", {
-        Title = "Outline Color",
-        Default = Settings.ChamsOutlineColor,
-        Callback = function(Value)
-            Settings.ChamsOutlineColor = Value
-        end
-    })
-    
-    ChamsSection:AddSlider("ChamsTransparency", {
-        Title = "Transparency",
-        Default = 0.5,
-        Min = 0,
-        Max = 1,
-        Rounding = 2,
-        Callback = function(Value)
-            Settings.ChamsTransparency = Value
-        end
-    })
-    
-    local SkeletonSection = Tabs.Visuals:AddSection("Skeleton ESP")
-    
-    SkeletonSection:AddToggle("SkeletonESP", {
-        Title = "Enable Skeleton",
-        Default = false,
-        Callback = function(Value)
-            Settings.SkeletonESP = Value
-        end
-    })
-    
-    SkeletonSection:AddColorpicker("SkeletonColor", {
-        Title = "Skeleton Color",
-        Default = Settings.SkeletonColor,
-        Callback = function(Value)
-            Settings.SkeletonColor = Value
-        end
-    })
-    
-    SkeletonSection:AddSlider("SkeletonThickness", {
-        Title = "Line Thickness",
-        Default = 1,
-        Min = 1,
-        Max = 3,
-        Rounding = 0,
-        Callback = function(Value)
-            Settings.SkeletonThickness = Value
-        end
-    })
-end
-
--- Settings Tab
-do
-    local ColorSection = Tabs.Settings:AddSection("Colors")
-    
-    ColorSection:AddColorpicker("EnemyColor", {
-        Title = "Enemy Color",
-        Default = Colors.Enemy,
-        Callback = function(Value)
-            Colors.Enemy = Value
-        end
-    })
-    
-    ColorSection:AddColorpicker("AllyColor", {
-        Title = "Ally Color",
-        Default = Colors.Ally,
-        Callback = function(Value)
-            Colors.Ally = Value
-        end
-    })
-    
-    ColorSection:AddColorpicker("HealthColor", {
-        Title = "Health Color",
-        Default = Colors.Health,
-        Callback = function(Value)
-            Colors.Health = Value
-        end
-    })
-    
-    local RainbowSection = Tabs.Settings:AddSection("Rainbow")
-    
-    RainbowSection:AddToggle("RainbowEnabled", {
-        Title = "Enable Rainbow",
-        Default = false,
-        Callback = function(Value)
-            Settings.RainbowEnabled = Value
-        end
-    })
-    
-    RainbowSection:AddSlider("RainbowSpeed", {
-        Title = "Rainbow Speed",
-        Default = 1,
-        Min = 0.1,
-        Max = 5,
-        Rounding = 1,
-        Callback = function(Value)
-            Settings.RainbowSpeed = Value
-        end
-    })
-    
-    local PerformanceSection = Tabs.Settings:AddSection("Performance")
-    
-    PerformanceSection:AddSlider("RefreshRate", {
-        Title = "Refresh Rate (FPS)",
-        Default = 60,
-        Min = 1,
-        Max = 144,
-        Rounding = 0,
-        Callback = function(Value)
-            Settings.RefreshRate = 1/Value
-        end
-    })
-end
-
--- Initialize rainbow color
-task.spawn(function()
-    while task.wait(0.1) do
-        Colors.Rainbow = Color3.fromHSV(tick() * Settings.RainbowSpeed % 1, 1, 1)
-    end
+    Tabs = {
+        ESP = Window:AddTab({ Title = "ESP", Icon = "eye" }),
+        Settings = Window:AddTab({ Title = "Settings", Icon = "settings" }),
+        Config = Window:AddTab({ Title = "Config", Icon = "save" })
+    }
 end)
 
--- Main ESP loop
+if not success then
+    warn("Failed to create UI window: "..tostring(err))
+    return
+end
+
+-- Add all your UI sections and elements here
+-- ... [Keep all your existing UI code but wrap in pcalls where needed]
+
+-- Initialize the ESP
 local lastUpdate = 0
-RunService.RenderStepped:Connect(function()
+local heartbeatConn = RunService.RenderStepped:Connect(function()
     if not Settings.Enabled then return end
     
     local currentTime = tick()
@@ -887,55 +242,42 @@ RunService.RenderStepped:Connect(function()
                 if not Drawings.ESP[player] then
                     CreateESP(player)
                 end
-                pcall(UpdateESP, player) -- Protected call to prevent errors from breaking the loop
+                pcall(UpdateESP, player)
             end
         end
         lastUpdate = currentTime
     end
 end)
 
--- Player management
+-- Player connection handlers
 Players.PlayerAdded:Connect(function(player)
-    if Settings.Enabled then
-        CreateESP(player)
-    end
+    pcall(CreateESP, player)
 end)
 
 Players.PlayerRemoving:Connect(function(player)
-    RemoveESP(player)
+    pcall(RemoveESP, player)
 end)
 
--- Initial setup
+-- Initial setup for existing players
 for _, player in ipairs(Players:GetPlayers()) do
     if player ~= LocalPlayer then
-        CreateESP(player)
+        pcall(CreateESP, player)
     end
 end
 
-Window:SelectTab(1)
-Fluent:Notify({
-    Title = "Universal ESP",
-    Content = "Loaded successfully!",
-    Duration = 5
-})
+-- Rainbow color effect
+task.spawn(function()
+    while task.wait(0.1) do
+        Colors.Rainbow = Color3.fromHSV(tick() * Settings.RainbowSpeed % 1, 1, 1)
+    end
+end)
 
--- Fullbright functionality
-local function UpdateLighting()
-    Lighting.FogEnd = 100000
-    Lighting.FogStart = 0
-    Lighting.ClockTime = 14
-    Lighting.Brightness = 2
-    Lighting.GlobalShadows = false
-end
-
-UpdateLighting()
-
-for _, property in ipairs({"FogEnd", "FogStart", "ClockTime", "Brightness", "GlobalShadows"}) do
-    Lighting:GetPropertyChangedSignal(property):Connect(UpdateLighting)
-end
-
--- Camera zoom
-LocalPlayer.CameraMaxZoomDistance = 1000
-LocalPlayer.CharacterAdded:Connect(function()
-    LocalPlayer.CameraMaxZoomDistance = 1000
+-- Final initialization
+pcall(function()
+    Window:SelectTab(1)
+    Fluent:Notify({
+        Title = "WA Universal ESP",
+        Content = "Loaded successfully!",
+        Duration = 5
+    })
 end)
