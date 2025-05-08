@@ -221,13 +221,30 @@ local function GetDistanceFromCamera(position)
     return (position - Camera.CFrame.Position).Magnitude
 end
 
--- More accurate screen position checks
+-- More accurate screen position checks with nil protection
 local function IsOnScreen(position)
-    local screenPos = Camera:WorldToViewportPoint(position)
-    return screenPos.Z > 0 and screenPos.X > 0 and screenPos.X < Camera.ViewportSize.X and screenPos.Y > 0 and screenPos.Y < Camera.ViewportSize.Y
+    if not position then return false end
+    local screenPos, onScreen = pcall(function()
+        return Camera:WorldToViewportPoint(position)
+    end)
+    if not screenPos then return false end
+    return onScreen and screenPos.Z > 0 
+        and screenPos.X > 0 and screenPos.X < Camera.ViewportSize.X 
+        and screenPos.Y > 0 and screenPos.Y < Camera.ViewportSize.Y
 end
 
--- Optimized ESP update
+-- Safe position getter
+local function GetScreenPosition(position)
+    local success, screenPos = pcall(function()
+        return Camera:WorldToViewportPoint(position)
+    end)
+    if success and screenPos then
+        return Vector2.new(screenPos.X, screenPos.Y), screenPos.Z > 0
+    end
+    return nil, false
+end
+
+-- Optimized ESP update with better error handling
 local function UpdateESP(player)
     if not Settings.Enabled then return end
     
@@ -277,80 +294,82 @@ local function UpdateESP(player)
     local color = Settings.RainbowEnabled and Colors.Rainbow or 
                  (player.Team == LocalPlayer.Team and Colors.Ally or Colors.Enemy)
     
+    -- Get screen positions safely
+    local topPos = (rootPart.CFrame * CFrame.new(0, character:GetExtentsSize().Y/2, 0)).Position
+    local bottomPos = (rootPart.CFrame * CFrame.new(0, -character:GetExtentsSize().Y/2, 0)).Position
+    
+    local topScreen, topOnScreen = GetScreenPosition(topPos)
+    local bottomScreen, bottomOnScreen = GetScreenPosition(bottomPos)
+    
+    if not topScreen or not bottomScreen or not topOnScreen or not bottomOnScreen then
+        for _, obj in pairs(esp.Box) do obj.Visible = false end
+        return
+    end
+    
     -- Update box ESP
     if Settings.BoxESP then
-        local size = character:GetExtentsSize()
-        local cf = rootPart.CFrame
+        local screenSize = bottomScreen.Y - topScreen.Y
+        local boxWidth = screenSize * 0.65
+        local boxPosition = Vector2.new(topScreen.X - boxWidth/2, topScreen.Y)
+        local boxSize = Vector2.new(boxWidth, screenSize)
         
-        local top = Camera:WorldToViewportPoint((cf * CFrame.new(0, size.Y/2, 0)).Position)
-        local bottom = Camera:WorldToViewportPoint((cf * CFrame.new(0, -size.Y/2, 0)).Position)
+        if Settings.BoxStyle == "Corner" then
+            local cornerSize = boxWidth * 0.2
+            
+            esp.Box.TopLeft.From = boxPosition
+            esp.Box.TopLeft.To = boxPosition + Vector2.new(cornerSize, 0)
+            esp.Box.TopLeft.Visible = true
+            
+            esp.Box.TopRight.From = boxPosition + Vector2.new(boxSize.X, 0)
+            esp.Box.TopRight.To = boxPosition + Vector2.new(boxSize.X - cornerSize, 0)
+            esp.Box.TopRight.Visible = true
+            
+            esp.Box.BottomLeft.From = boxPosition + Vector2.new(0, boxSize.Y)
+            esp.Box.BottomLeft.To = boxPosition + Vector2.new(cornerSize, boxSize.Y)
+            esp.Box.BottomLeft.Visible = true
+            
+            esp.Box.BottomRight.From = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
+            esp.Box.BottomRight.To = boxPosition + Vector2.new(boxSize.X - cornerSize, boxSize.Y)
+            esp.Box.BottomRight.Visible = true
+            
+            esp.Box.Left.From = boxPosition
+            esp.Box.Left.To = boxPosition + Vector2.new(0, cornerSize)
+            esp.Box.Left.Visible = true
+            
+            esp.Box.Right.From = boxPosition + Vector2.new(boxSize.X, 0)
+            esp.Box.Right.To = boxPosition + Vector2.new(boxSize.X, cornerSize)
+            esp.Box.Right.Visible = true
+            
+            esp.Box.Top.From = boxPosition + Vector2.new(0, boxSize.Y)
+            esp.Box.Top.To = boxPosition + Vector2.new(0, boxSize.Y - cornerSize)
+            esp.Box.Top.Visible = true
+            
+            esp.Box.Bottom.From = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
+            esp.Box.Bottom.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y - cornerSize)
+            esp.Box.Bottom.Visible = true
+        else -- Full box
+            esp.Box.Left.From = boxPosition
+            esp.Box.Left.To = boxPosition + Vector2.new(0, boxSize.Y)
+            esp.Box.Left.Visible = true
+            
+            esp.Box.Right.From = boxPosition + Vector2.new(boxSize.X, 0)
+            esp.Box.Right.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
+            esp.Box.Right.Visible = true
+            
+            esp.Box.Top.From = boxPosition
+            esp.Box.Top.To = boxPosition + Vector2.new(boxSize.X, 0)
+            esp.Box.Top.Visible = true
+            
+            esp.Box.Bottom.From = boxPosition + Vector2.new(0, boxSize.Y)
+            esp.Box.Bottom.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
+            esp.Box.Bottom.Visible = true
+        end
         
-        if top.Z > 0 and bottom.Z > 0 then
-            local screenSize = bottom.Y - top.Y
-            local boxWidth = screenSize * 0.65
-            local boxPosition = Vector2.new(top.X - boxWidth/2, top.Y)
-            local boxSize = Vector2.new(boxWidth, screenSize)
-            
-            if Settings.BoxStyle == "Corner" then
-                local cornerSize = boxWidth * 0.2
-                
-                esp.Box.TopLeft.From = boxPosition
-                esp.Box.TopLeft.To = boxPosition + Vector2.new(cornerSize, 0)
-                esp.Box.TopLeft.Visible = true
-                
-                esp.Box.TopRight.From = boxPosition + Vector2.new(boxSize.X, 0)
-                esp.Box.TopRight.To = boxPosition + Vector2.new(boxSize.X - cornerSize, 0)
-                esp.Box.TopRight.Visible = true
-                
-                esp.Box.BottomLeft.From = boxPosition + Vector2.new(0, boxSize.Y)
-                esp.Box.BottomLeft.To = boxPosition + Vector2.new(cornerSize, boxSize.Y)
-                esp.Box.BottomLeft.Visible = true
-                
-                esp.Box.BottomRight.From = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
-                esp.Box.BottomRight.To = boxPosition + Vector2.new(boxSize.X - cornerSize, boxSize.Y)
-                esp.Box.BottomRight.Visible = true
-                
-                esp.Box.Left.From = boxPosition
-                esp.Box.Left.To = boxPosition + Vector2.new(0, cornerSize)
-                esp.Box.Left.Visible = true
-                
-                esp.Box.Right.From = boxPosition + Vector2.new(boxSize.X, 0)
-                esp.Box.Right.To = boxPosition + Vector2.new(boxSize.X, cornerSize)
-                esp.Box.Right.Visible = true
-                
-                esp.Box.Top.From = boxPosition + Vector2.new(0, boxSize.Y)
-                esp.Box.Top.To = boxPosition + Vector2.new(0, boxSize.Y - cornerSize)
-                esp.Box.Top.Visible = true
-                
-                esp.Box.Bottom.From = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
-                esp.Box.Bottom.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y - cornerSize)
-                esp.Box.Bottom.Visible = true
-            else -- Full box
-                esp.Box.Left.From = boxPosition
-                esp.Box.Left.To = boxPosition + Vector2.new(0, boxSize.Y)
-                esp.Box.Left.Visible = true
-                
-                esp.Box.Right.From = boxPosition + Vector2.new(boxSize.X, 0)
-                esp.Box.Right.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
-                esp.Box.Right.Visible = true
-                
-                esp.Box.Top.From = boxPosition
-                esp.Box.Top.To = boxPosition + Vector2.new(boxSize.X, 0)
-                esp.Box.Top.Visible = true
-                
-                esp.Box.Bottom.From = boxPosition + Vector2.new(0, boxSize.Y)
-                esp.Box.Bottom.To = boxPosition + Vector2.new(boxSize.X, boxSize.Y)
-                esp.Box.Bottom.Visible = true
+        for _, obj in pairs(esp.Box) do
+            if obj.Visible then
+                obj.Color = color
+                obj.Thickness = Settings.BoxThickness
             end
-            
-            for _, obj in pairs(esp.Box) do
-                if obj.Visible then
-                    obj.Color = color
-                    obj.Thickness = Settings.BoxThickness
-                end
-            end
-        else
-            for _, obj in pairs(esp.Box) do obj.Visible = false end
         end
     else
         for _, obj in pairs(esp.Box) do obj.Visible = false end
@@ -358,11 +377,15 @@ local function UpdateESP(player)
     
     -- Update tracer
     if Settings.TracerESP then
-        local screenPos = Camera:WorldToViewportPoint(rootPart.Position)
-        esp.Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
-        esp.Tracer.To = Vector2.new(screenPos.X, screenPos.Y)
-        esp.Tracer.Color = color
-        esp.Tracer.Visible = true
+        local rootScreen = GetScreenPosition(rootPart.Position)
+        if rootScreen then
+            esp.Tracer.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+            esp.Tracer.To = rootScreen
+            esp.Tracer.Color = color
+            esp.Tracer.Visible = true
+        else
+            esp.Tracer.Visible = false
+        end
     else
         esp.Tracer.Visible = false
     end
@@ -370,11 +393,11 @@ local function UpdateESP(player)
     -- Update health bar
     if Settings.HealthESP and humanoid then
         local healthPercent = humanoid.Health / humanoid.MaxHealth
-        local barHeight = (bottom.Y - top.Y) * 0.8
+        local barHeight = (bottomScreen.Y - topScreen.Y) * 0.8
         local barWidth = 4
         local barPos = Vector2.new(
             boxPosition.X - barWidth - 2,
-            boxPosition.Y + ((bottom.Y - top.Y) - barHeight)/2
+            boxPosition.Y + ((bottomScreen.Y - topScreen.Y) - barHeight)/2
         )
         
         esp.HealthBar.Fill.Color = Color3.new(1 - healthPercent, healthPercent, 0)
@@ -402,7 +425,7 @@ local function UpdateESP(player)
     -- Update name
     if Settings.NameESP then
         esp.Info.Name.Text = player.DisplayName
-        esp.Info.Name.Position = Vector2.new(top.X, top.Y - 20)
+        esp.Info.Name.Position = Vector2.new(topScreen.X, topScreen.Y - 20)
         esp.Info.Name.Color = color
         esp.Info.Name.Visible = true
     else
@@ -426,7 +449,6 @@ local function UpdateESP(player)
     if Settings.SkeletonESP then
         local skeleton = Drawings.Skeleton[player]
         if not skeleton then
-            -- Initialize skeleton if it wasn't created before
             skeleton = {
                 Head = Drawing.new("Line"),
                 Neck = Drawing.new("Line"),
@@ -525,19 +547,28 @@ local function UpdateESP(player)
 end
 
 local function UpdateSkeletonLine(part1, part2, line)
+    if not part1 or not part2 then
+        line.Visible = false
+        return
+    end
+    
     local pos1 = part1.Position
     local pos2 = part2.Position
     
     if IsOnScreen(pos1) and IsOnScreen(pos2) then
-        local screen1 = Camera:WorldToViewportPoint(pos1)
-        local screen2 = Camera:WorldToViewportPoint(pos2)
+        local screen1 = GetScreenPosition(pos1)
+        local screen2 = GetScreenPosition(pos2)
         
-        line.From = Vector2.new(screen1.X, screen1.Y)
-        line.To = Vector2.new(screen2.X, screen2.Y)
-        line.Color = Settings.SkeletonColor
-        line.Thickness = Settings.SkeletonThickness
-        line.Transparency = Settings.SkeletonTransparency
-        line.Visible = true
+        if screen1 and screen2 then
+            line.From = screen1
+            line.To = screen2
+            line.Color = Settings.SkeletonColor
+            line.Thickness = Settings.SkeletonThickness
+            line.Transparency = Settings.SkeletonTransparency
+            line.Visible = true
+        else
+            line.Visible = false
+        end
     else
         line.Visible = false
     end
@@ -856,7 +887,7 @@ RunService.RenderStepped:Connect(function()
                 if not Drawings.ESP[player] then
                     CreateESP(player)
                 end
-                UpdateESP(player)
+                pcall(UpdateESP, player) -- Protected call to prevent errors from breaking the loop
             end
         end
         lastUpdate = currentTime
