@@ -87,10 +87,28 @@ local Settings = {
 local function CreateDrawing(type, properties)
     local drawing = Drawing.new(type)
     for prop, value in pairs(properties) do
-        drawing[prop] = value
+        -- Special handling for Font which can be either number or string
+        if prop == "Font" then
+            if type(value) == "string" then
+                -- Convert font names to their enum values
+                local fontEnum = {
+                    ["UI"] = 0,
+                    ["System"] = 1,
+                    ["Plex"] = 2,
+                    ["Monospace"] = 3
+                }
+                drawing.Font = fontEnum[value] or 2 -- Default to Plex if unknown
+            else
+                drawing.Font = value
+            end
+        else
+            -- For all other properties
+            drawing[prop] = value
+        end
     end
     return drawing
 end
+
 
 local function GetPlayerColor(player)
     if Settings.RainbowEnabled then
@@ -201,14 +219,46 @@ local function CreateESP(player)
     if player == LocalPlayer then return end
     
     local box = {
-        TopLeft = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
-        TopRight = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
-        BottomLeft = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
-        BottomRight = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
-        Left = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
-        Right = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
-        Top = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness}),
-        Bottom = CreateDrawing("Line", {Visible = false, Color = Colors.Enemy, Thickness = Settings.BoxThickness})
+        TopLeft = CreateDrawing("Line", {
+            Visible = false, 
+            Color = Colors.Enemy, 
+            Thickness = Settings.BoxThickness
+        }),
+        TopRight = CreateDrawing("Line", {
+            Visible = false, 
+            Color = Colors.Enemy, 
+            Thickness = Settings.BoxThickness
+        }),
+        BottomLeft = CreateDrawing("Line", {
+            Visible = false, 
+            Color = Colors.Enemy, 
+            Thickness = Settings.BoxThickness
+        }),
+        BottomRight = CreateDrawing("Line", {
+            Visible = false, 
+            Color = Colors.Enemy, 
+            Thickness = Settings.BoxThickness
+        }),
+        Left = CreateDrawing("Line", {
+            Visible = false, 
+            Color = Colors.Enemy, 
+            Thickness = Settings.BoxThickness
+        }),
+        Right = CreateDrawing("Line", {
+            Visible = false, 
+            Color = Colors.Enemy, 
+            Thickness = Settings.BoxThickness
+        }),
+        Top = CreateDrawing("Line", {
+            Visible = false, 
+            Color = Colors.Enemy, 
+            Thickness = Settings.BoxThickness
+        }),
+        Bottom = CreateDrawing("Line", {
+            Visible = false, 
+            Color = Colors.Enemy, 
+            Thickness = Settings.BoxThickness
+        })
     }
     
     local tracer = CreateDrawing("Line", {
@@ -218,14 +268,43 @@ local function CreateESP(player)
     })
     
     local healthBar = {
-        Outline = CreateDrawing("Square", {Visible = false}),
-        Fill = CreateDrawing("Square", {Visible = false, Filled = true, Color = Colors.Health}),
-        Text = CreateDrawing("Text", {Visible = false, Center = true, Size = Settings.TextSize, Color = Colors.Health, Font = Settings.TextFont})
+        Outline = CreateDrawing("Square", {
+            Visible = false,
+            Color = Colors.Enemy,
+            Thickness = 1
+        }),
+        Fill = CreateDrawing("Square", {
+            Visible = false, 
+            Filled = true, 
+            Color = Colors.Health
+        }),
+        Text = CreateDrawing("Text", {
+            Visible = false, 
+            Center = true, 
+            Size = Settings.TextSize, 
+            Color = Colors.Health, 
+            Font = Settings.TextFont,
+            Outline = true
+        })
     }
     
     local info = {
-        Name = CreateDrawing("Text", {Visible = false, Center = true, Size = Settings.TextSize, Color = Colors.Enemy, Font = Settings.TextFont, Outline = true}),
-        Distance = CreateDrawing("Text", {Visible = false, Center = true, Size = Settings.TextSize, Color = Colors.Enemy, Font = Settings.TextFont, Outline = true})
+        Name = CreateDrawing("Text", {
+            Visible = false, 
+            Center = true, 
+            Size = Settings.TextSize, 
+            Color = Colors.Enemy, 
+            Font = Settings.TextFont, 
+            Outline = true
+        }),
+        Distance = CreateDrawing("Text", {
+            Visible = false, 
+            Center = true, 
+            Size = Settings.TextSize, 
+            Color = Colors.Distance, 
+            Font = Settings.TextFont, 
+            Outline = true
+        })
     }
     
     local snapline = CreateDrawing("Line", {
